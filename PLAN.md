@@ -2,7 +2,13 @@
 
 > Target site: `https://quotes.toscrape.com/`
 > Stack: Python 3.10+, `requests`, `beautifulsoup4`, `pytest`
-> Deliverables: GitHub repository, compiled index file, 5-minute video demonstration
+> Deliverables: GitHub repository and compiled index file.
+
+> **Status note.** The video demonstration and any artefacts that exist
+> only to support it (video script, segment-by-segment outline, recording
+> workflow) are currently deferred. Phase 7 and Appendix D below are kept
+> as a reference for when video work resumes; until then, treat them as
+> aspirational rather than active scope. Phases 0-6 are unaffected.
 
 ---
 
@@ -211,7 +217,7 @@ Results are committed and reproduced in `README.md`'s performance table.
 
 - **`README.md`** -- Project overview, install, quickstart, command reference, architecture diagram, index schema, performance table, design summary, GenAI declaration, license, badges (CI, coverage, Python version).
 - **`docs/design_notes.md`** -- Algorithmic rationale and references: inverted index layout (Manning et al., *Introduction to Information Retrieval*), ranking choice (TF-IDF vs BM25), tokenisation choice (no stemming, with reasoning), Zipf validation linked to the `stats` command.
-- **`docs/video_script.md`** -- A timed script for the 5-minute demonstration, written before recording. See Appendix D. The 30-second GenAI reflection segment is prepared as part of this script; there is no separate persistent log file.
+- *(Deferred)* A timed video script lived at `docs/video_script.md`; it has been removed while video work is on hold. Appendix D below preserves the segment-level outline for when recording resumes.
 
 ### 10. Optional Extensions
 
@@ -270,7 +276,7 @@ explicit definition of done, and a tag at completion when applicable.
 - `src/__init__.py`, empty stubs for `models.py`, `crawler.py`, `indexer.py`, `storage.py`, `search.py`, `utils.py`, `main.py`.
 - `tests/` with empty stubs matching each module.
 - `data/.gitkeep`.
-- `docs/design_notes.md` (outline), `docs/video_script.md` (placeholder).
+- `docs/design_notes.md` (outline).
 - `requirements.txt` (`requests`, `beautifulsoup4`), `requirements-dev.txt` (`pytest`, `pytest-cov`, `pytest-benchmark`, `ruff`, `mypy`, `responses`).
 - `.gitignore`, `pyproject.toml` (ruff + mypy config), `.github/workflows/ci.yml`.
 - `README.md` skeleton with section headings filled in.
@@ -368,16 +374,16 @@ explicit definition of done, and a tag at completion when applicable.
 3. Add a `stats` command that prints the top-20 tokens; add a Zipf observation to `design_notes.md`.
 4. Finalise `README.md`: architecture diagram, install, quickstart, full command reference, schema reference, performance table, design summary, GenAI declaration, references.
 5. Finalise `design_notes.md`: inverted index layout, ranking choice, tokenisation choice, Zipf validation, references to Manning IR, BM25 paper, Porter (1980).
-6. Draft the GenAI reflection talking points directly in `docs/video_script.md` under the 4:30-5:00 segment: pick two concrete moments from the development of Phases 1-5 -- one where AI accelerated the work, one where it misled or required correction -- plus one sentence on the broader learning implication. These are talking points only, not a persistent log.
+6. *(Deferred until video work resumes.)* Draft the GenAI reflection talking points -- two concrete moments from Phases 1-5 plus a one-sentence learning implication -- in whatever artefact replaces `docs/video_script.md`.
 
-**Definition of done.** CI green at coverage >= 90%. README and `design_notes.md` complete; `video_script.md` covers all five segments including the GenAI talking points. `stats` command works.
+**Definition of done.** CI green at coverage >= 90%. README and `design_notes.md` complete; `stats` command works.
 
 **Tag.** `v0.9-rc`.
 
 ### Phase 6 -- Optional Extensions
 
 **Status.** Optional. This phase is entered only after `v0.9-rc` is fully
-green: tests, coverage, README, design notes, and video script all complete.
+green: tests, coverage, README, and design notes all complete.
 If time, energy, or stability budget is tight, **skip this phase entirely**
 and ship `v0.9-rc` as `v1.0`. The shippable product is the core plus
 TF-IDF ranking, phrase queries, and the `stats` command -- nothing in
@@ -491,7 +497,6 @@ Search-Engine-Tool/
 |   +-- index.json
 +-- docs/
 |   +-- design_notes.md
-|   +-- video_script.md
 +-- .gitignore
 +-- pyproject.toml
 +-- requirements.txt

@@ -108,8 +108,7 @@ plausible alternative here. We chose TF-IDF for three project-specific
 reasons:
 
 1. **Pedagogical transparency.** The TF-IDF score for any document and
-   query can be hand-computed from the printed posting list; the video
-   walkthrough exploits this.
+   query can be hand-computed from the printed posting list.
 2. **No tuning data.** BM25 introduces two hyperparameters (`k1` and
    `b`) that must be calibrated to a corpus; with 200-odd documents and
    no relevance judgements there is no principled way to tune them.

@@ -227,9 +227,6 @@ PYTHONPATH=. python scripts/smoke_crawler.py
 ## GenAI declaration
 
 This project was developed with assistance from a generative AI tool.
-The video demonstration includes a 30-second segment reflecting on two
-specific moments where the AI helped or had to be corrected during
-development.
 
 ## References
 
