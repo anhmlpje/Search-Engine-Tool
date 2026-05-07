@@ -171,6 +171,27 @@ class SearchShell(cmd.Cmd):
                 f"{score_label}={result.score:g}  matched=[{matched}]"
             )
 
+    def do_stats(self, _arg: str) -> None:
+        """Show the index summary plus the 20 most frequent tokens.
+
+        Useful for sanity-checking that tokenisation produced a
+        language-like distribution (Zipf's law) on the indexed corpus.
+        """
+        if self.index is None:
+            self._emit("no index loaded; run 'load' or 'build' first")
+            return
+        self._emit_index_summary(self.index, "[stats]")
+
+        term_totals = [
+            (term, sum(p.freq for p in postings.values()))
+            for term, postings in self.index.index.items()
+        ]
+        term_totals.sort(key=lambda t: (-t[1], t[0]))
+
+        self._emit("top 20 tokens by total corpus frequency:")
+        for rank, (term, total) in enumerate(term_totals[:20], start=1):
+            self._emit(f"  {rank:>2}. {term:<20s} {total}")
+
     def do_exit(self, _arg: str) -> bool:
         """Leave the shell."""
         return True
