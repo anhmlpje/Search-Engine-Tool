@@ -53,6 +53,13 @@ def load(path: Path | str) -> SearchIndex:
 
     version = data.get("schema_version")
     if version != SCHEMA_VERSION:
+        if version == 1:
+            raise SchemaMismatch(
+                f"index file at {target} uses schema v1; "
+                f"current code requires v{SCHEMA_VERSION} "
+                f"(field-aware index with per-document token streams). "
+                "Run 'build' to regenerate the index file."
+            )
         raise SchemaMismatch(
             f"schema version mismatch in {target}: "
             f"expected {SCHEMA_VERSION}, got {version!r}"

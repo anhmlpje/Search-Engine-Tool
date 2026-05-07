@@ -172,7 +172,70 @@ The middle of the top-20 (`his`, `he`, `was`, `as`, ...) is also
 typical of English narrative, and the appearance of `life` and `love`
 in the top 20 reflects the literary-quote nature of the corpus.
 
-## 7. Phrase Adjacency: Worked Example
+## 7. Fielded Search and Snippets (Schema v2)
+
+Schema version 2 introduces two related extensions that share the same
+underlying motivation: the data already in the inverted index can do
+more than the four required commands ask for, and surfacing that extra
+capability turns a homework search engine into something closer to a
+real one. Neither extension changes the on-disk format from a logical
+perspective -- the inverted index still maps terms to documents to
+postings, and postings still carry frequency and positions -- but the
+container shape is widened to make the additional capabilities first-
+class.
+
+### Fielded inverted index
+
+In schema v1 the index was a single posting space: one term -> documents
+table, with all of a page's words flattened together. Schema v2 splits
+the index into three named fields -- `text`, `author`, and `tag` --
+each with its own posting list and its own per-document token stream:
+
+    index : field -> term -> doc_id -> { freq, positions }
+
+The CLI accepts a `field:term` syntax that routes the lookup to the
+named field's posting list; bare terms continue to search across every
+field and are aggregated for ranking. This is the same design used by
+Lucene and Elasticsearch (their `match` query against multiple fields
+versus their `term`/`match` query restricted to one field), translated
+to a small Python project. The motivation is identical: the corpus has
+real structural information -- a quote's author is not the same kind of
+content as the quote text -- and discarding that structure at index time
+is a form of information loss. Fielded indexing preserves it.
+
+A document's `length` is now the sum of its fields' lengths, and the
+TF-IDF formula is unchanged in shape: `tf` is freq divided by document
+length, `idf` is log(N / df) where df is computed against the field
+restriction when one is supplied, or across the union of fields when
+the query is bare.
+
+### Match snippets
+
+Each document now stores its raw lower-cased token sequence per field.
+At query time, `find` looks up the matched positions in the document's
+`text` token stream and assembles a window of context around the first
+match, wrapping the matched tokens in brackets:
+
+    ...the world is full of [GOOD] [FRIENDS] who...
+
+This is the same data already required by the brief (positions of every
+word) put to a second use; no new index is built. The implementation is
+in `_format_snippet` and `_build_snippet` in `src/search.py` and is
+shared between `find` and `find_phrase` so phrase results show the
+adjacency context as well.
+
+### Why one schema bump rather than two
+
+Both extensions touch the on-disk format. They could have been shipped
+as separate increments (v2 for fielded indexing, v3 for snippets) but
+the cost of maintaining a v2-only intermediate state was higher than
+the value: every query path would have to handle "either layout" for
+the time the two were independent. We chose a single v2 release that
+contains both, with `storage.load` rejecting v1 files with an explicit
+"please rebuild" message rather than silently carrying compatibility
+code into a coursework submission.
+
+## 8. Phrase Adjacency: Worked Example
 
 For the home-page document of the live site, both `good` and `friends`
 appear in the second quote's text:

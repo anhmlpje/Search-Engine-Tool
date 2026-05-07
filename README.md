@@ -93,16 +93,34 @@ commands, malformed input, or `Ctrl+C`.
 
 ### Auxiliary
 
-| Command              | Description                                                                                                       |
-|----------------------|-------------------------------------------------------------------------------------------------------------------|
-| `find "<phrase>"`    | Phrase search: documents are matched only when the tokens of the phrase appear at consecutive positions.          |
-| `stats`              | Index summary plus the 20 most frequent tokens; useful for sanity-checking the tokenisation distribution.         |
-| `help`               | List commands with one-line descriptions.                                                                         |
-| `exit` / `quit`      | Leave the shell.                                                                                                  |
+| Command                  | Description                                                                                                       |
+|--------------------------|-------------------------------------------------------------------------------------------------------------------|
+| `find "<phrase>"`        | Phrase search: text-field documents matched only when the tokens of the phrase appear at consecutive positions.   |
+| `find <field>:<term>`    | Fielded search: restrict a term to a specific field (`text`, `author`, or `tag`). Mix with bare terms freely.     |
+| `stats`                  | Index summary plus the 20 most frequent tokens; useful for sanity-checking the tokenisation distribution.         |
+| `help`                   | List commands with one-line descriptions.                                                                         |
+| `exit` / `quit`          | Leave the shell.                                                                                                  |
 
 Query input is run through the same tokeniser the index was built with,
 so `find good!` matches the indexed word `good`, and `find "good friends"`
-finds the phrase even if the user writes it with smart quotes.
+finds the phrase even if the user writes it with smart quotes. `find`
+results carry a short context snippet drawn from the document's stored
+text tokens, with matched terms wrapped in brackets:
+
+```text
+1. https://...quote-page/  tfidf=0.0349  matched=[good=2 friends=1]
+   ...the world is full of [GOOD] [FRIENDS] who...
+```
+
+The example below shows fielded queries:
+
+```text
+> find author:wilde
+1. https://quotes.toscrape.com/author/Oscar-Wilde  tfidf=...  matched=[author:wilde=1]
+
+> find love author:wilde
+1. https://quotes.toscrape.com/...  tfidf=...  matched=[love=2 author:wilde=1]
+```
 
 ## Architecture
 

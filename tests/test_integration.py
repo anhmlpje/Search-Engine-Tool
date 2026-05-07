@@ -129,7 +129,10 @@ class TestPipeline:
         meta = index.metadata
         assert meta.base_url == "https://site.test/"
         assert meta.page_count >= 2  # home + /page/2/, possibly skipped tags
-        assert meta.unique_terms == len(index.index)
+        union = set()
+        for field_index in index.index.values():
+            union.update(field_index.keys())
+        assert meta.unique_terms == len(union)
         assert meta.total_tokens == sum(d.length for d in index.documents.values())
 
 
