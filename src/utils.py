@@ -43,16 +43,25 @@ def safe_request(
     timeout: float = 10.0,
     retries: int = 2,
     session: requests.Session | None = None,
+    clock: Clock | None = None,
+    retry_delay: float = 0.0,
 ) -> requests.Response:
     """GET ``url`` with up to ``retries`` extra attempts on transient errors.
 
-    The crawler is responsible for the politeness window between successful
-    requests; this helper only retries on failure and raises
-    :class:`HttpError` if all attempts fail.
+    Retries are themselves requests to the website, so the brief's
+    politeness window applies between them just as it does between
+    successful requests. When the caller provides a ``clock`` and a
+    positive ``retry_delay``, the helper sleeps for ``retry_delay`` before
+    each retry attempt -- the crawler always does this so the 6-second
+    window is honoured even when a fetch fails. With no clock supplied the
+    helper retries immediately, which is convenient for unit tests that
+    only care about HTTP behaviour.
     """
     sess = session if session is not None else requests
     last_error: Exception | None = None
-    for _ in range(retries + 1):
+    for attempt in range(retries + 1):
+        if attempt > 0 and clock is not None and retry_delay > 0:
+            clock.sleep(retry_delay)
         try:
             response = sess.get(url, timeout=timeout)
             response.raise_for_status()

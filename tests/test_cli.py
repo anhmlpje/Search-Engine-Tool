@@ -155,6 +155,16 @@ class TestPrint:
         out = _drive(shell, "load", "print")
         assert "usage" in out
 
+    def test_print_strips_punctuation_via_tokenizer(self, saved_index: Path) -> None:
+        """`print good!` must match the indexed word `good` -- queries are
+        tokenised the same way the index was built."""
+        shell = SearchShell(base_url="https://x/", index_path=saved_index)
+        out = _drive(shell, "load", "print hello!")
+        # Indexed word is "hello"; with tokenisation in place, "hello!" -> "hello"
+        # and we should see the posting list, not "no matches".
+        assert "doc_001" in out
+        assert "no matches" not in out
+
 
 class TestFind:
     def test_find_single_term_returns_results(self, saved_index: Path) -> None:
@@ -189,6 +199,24 @@ class TestFind:
         shell = SearchShell(base_url="https://x/", index_path=saved_index)
         out = _drive(shell, "load", 'find "unbalanced')
         assert "error" in out.lower()
+
+    def test_find_strips_punctuation_via_tokenizer(self, saved_index: Path) -> None:
+        """`find hello!` must still match the indexed word `hello`."""
+        shell = SearchShell(base_url="https://x/", index_path=saved_index)
+        out = _drive(shell, "load", "find hello!")
+        find_section = out.split("[loaded]")[-1]
+        assert "https://x/a" in find_section
+        assert "no matches" not in find_section
+
+    def test_find_punctuation_only_query_says_usage(
+        self, saved_index: Path
+    ) -> None:
+        """If every input item tokenises to nothing, treat it as an empty
+        query rather than calling find with []."""
+        shell = SearchShell(base_url="https://x/", index_path=saved_index)
+        out = _drive(shell, "load", "find !!!")
+        find_section = out.split("[loaded]")[-1]
+        assert "usage" in find_section
 
 
 class TestFindPhrase:
