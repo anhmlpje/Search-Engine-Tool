@@ -23,6 +23,7 @@ from src.storage import (
     load,
     save,
 )
+from src.utils import tokenize
 
 DEFAULT_INDEX_PATH = Path("data/index.json")
 DEFAULT_BASE_URL = "https://quotes.toscrape.com/"
@@ -110,11 +111,14 @@ class SearchShell(cmd.Cmd):
         if self.index is None:
             self._emit("no index loaded; run 'load' or 'build' first")
             return
-        word = arg.strip()
-        if not word:
+        # Run the input through the same tokeniser used at index time so
+        # that "print good!" matches the indexed word "good", and so that
+        # apostrophes/punctuation behave consistently with the index.
+        tokens = tokenize(arg)
+        if not tokens:
             self._emit("usage: print <word>")
             return
-        self._emit(print_word(self.index, word))
+        self._emit(print_word(self.index, tokens[0]))
 
     def do_find(self, arg: str) -> None:
         """Find pages by AND query or quoted phrase.
@@ -134,12 +138,24 @@ class SearchShell(cmd.Cmd):
             self._emit("usage: find <term> [term ...]   or   find \"<phrase>\"")
             return
 
-        # A single quoted multi-word string -> phrase mode.
+        # A single quoted multi-word string -> phrase mode (find_phrase
+        # tokenises internally, so trailing punctuation inside the phrase
+        # is handled there).
         if len(items) == 1 and " " in items[0]:
             results = find_phrase(self.index, items[0])
             mode = "phrase"
         else:
-            results = find(self.index, items)
+            # Tokenise each bare term the same way the indexer did, so that
+            # "find good!" or "find good, friends" still matches the indexed
+            # words. tokenize() returns zero or more tokens per input item;
+            # we flatten and skip empty results.
+            terms: list[str] = []
+            for item in items:
+                terms.extend(tokenize(item))
+            if not terms:
+                self._emit("usage: find <term> [term ...]   or   find \"<phrase>\"")
+                return
+            results = find(self.index, terms)
             mode = "and"
 
         if not results:

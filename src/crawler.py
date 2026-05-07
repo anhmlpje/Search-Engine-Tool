@@ -57,7 +57,12 @@ class Crawler:
             first = False
 
             try:
-                response = safe_request(url, session=self.session)
+                response = safe_request(
+                    url,
+                    session=self.session,
+                    clock=self.clock,
+                    retry_delay=self.delay_seconds,
+                )
             except HttpError:
                 continue
 

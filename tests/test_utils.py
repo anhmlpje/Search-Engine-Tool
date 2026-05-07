@@ -72,3 +72,54 @@ class TestSafeRequest:
         # RequestException and therefore retried then wrapped in HttpError.
         with pytest.raises(HttpError):
             safe_request("https://no-such-host.invalid/", retries=0)
+
+    @responses.activate
+    def test_sleeps_between_retries_when_clock_provided(self) -> None:
+        """The brief's politeness window applies to retries too: each retry
+        attempt is itself a request to the same host, so the helper must
+        sleep ``retry_delay`` seconds before each retry when a clock is
+        given. The first attempt is not preceded by a sleep."""
+
+        class FakeClock:
+            def __init__(self) -> None:
+                self.calls: list[float] = []
+
+            def sleep(self, seconds: float) -> None:
+                self.calls.append(seconds)
+
+        responses.add(responses.GET, "https://example.com/", status=500)
+        responses.add(responses.GET, "https://example.com/", status=500)
+        responses.add(responses.GET, "https://example.com/", body="ok", status=200)
+        clock = FakeClock()
+        response = safe_request(
+            "https://example.com/",
+            retries=2,
+            clock=clock,
+            retry_delay=6.0,
+        )
+        assert response.status_code == 200
+        # Two retries -> two sleeps before retry attempts 2 and 3.
+        assert clock.calls == [6.0, 6.0]
+
+    @responses.activate
+    def test_sleeps_before_each_retry_even_when_all_fail(self) -> None:
+        class FakeClock:
+            def __init__(self) -> None:
+                self.calls: list[float] = []
+
+            def sleep(self, seconds: float) -> None:
+                self.calls.append(seconds)
+
+        for _ in range(3):
+            responses.add(responses.GET, "https://example.com/", status=500)
+        clock = FakeClock()
+        with pytest.raises(HttpError):
+            safe_request(
+                "https://example.com/",
+                retries=2,
+                clock=clock,
+                retry_delay=6.0,
+            )
+        # Even on total failure, the politeness sleeps before retries 2 and 3
+        # must have happened so the host did not see three back-to-back GETs.
+        assert clock.calls == [6.0, 6.0]

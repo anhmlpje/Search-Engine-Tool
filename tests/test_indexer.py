@@ -100,24 +100,42 @@ class TestBuildIndex:
         assert index.documents["doc_001"].url == "https://site.test/"
         assert index.documents["doc_002"].url == "https://site.test/author/einstein"
 
-    def test_records_term_frequency(self) -> None:
-        pages = [_page("https://site.test/", QUOTE_PAGE_HTML)]
-        index = build_index(pages, base_url="https://site.test/")
-        good_postings = index.index["good"]
-        assert "doc_001" in good_postings
-        # "good" appears: (1) tag, (2) "Good friends are good" -> two occurrences,
-        # (3) tag inside first quote. Total observed: tag/good, "good" inside
-        # second quote text twice.
-        assert good_postings["doc_001"].freq == good_postings["doc_001"].freq
-        # Just assert at least 2; exact count depends on extraction order
-        assert good_postings["doc_001"].freq >= 2
+    def test_records_term_frequency_and_positions(self) -> None:
+        """The fixture's two ``.quote`` blocks tokenise (in extraction order
+        of text -> author -> tags) to the deterministic sequence:
 
-    def test_records_positions_in_order(self) -> None:
+            0  the
+            1  world
+            2  is
+            3  good       <- quote 1 text
+            4  albert
+            5  einstein   <- quote 1 author
+            6  world
+            7  good       <- quote 1 tags
+            8  good
+            9  friends
+            10 are
+            11 good       <- quote 2 text
+            12 mark
+            13 twain      <- quote 2 author
+            14 friends    <- quote 2 tags
+
+        So ``good`` must have freq=4 at positions [3, 7, 8, 11].
+        """
         pages = [_page("https://site.test/", QUOTE_PAGE_HTML)]
         index = build_index(pages, base_url="https://site.test/")
-        good = index.index["good"]["doc_001"]
-        assert good.positions == sorted(good.positions)
-        assert good.freq == len(good.positions)
+        posting = index.index["good"]["doc_001"]
+        assert posting.freq == 4
+        assert posting.positions == [3, 7, 8, 11]
+
+    def test_freq_equals_positions_length_invariant(self) -> None:
+        """Across every term in the index, freq must equal len(positions)."""
+        pages = [_page("https://site.test/", QUOTE_PAGE_HTML)]
+        index = build_index(pages, base_url="https://site.test/")
+        for postings in index.index.values():
+            for posting in postings.values():
+                assert posting.freq == len(posting.positions)
+                assert posting.positions == sorted(posting.positions)
 
     def test_lowercases_terms(self) -> None:
         pages = [_page("https://site.test/", QUOTE_PAGE_HTML)]
