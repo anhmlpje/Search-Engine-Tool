@@ -158,6 +158,21 @@ class SearchShell(cmd.Cmd):
         self._emit(f"unknown command: {head}")
         self._emit("type 'help' for available commands")
 
+    def cmdloop(self, intro: object | None = None) -> None:
+        """Wrap the inherited loop so Ctrl+C cancels the current input
+        without exiting the shell -- the user must type 'exit' or 'quit'
+        to leave, matching the conventions of the Python and SQLite REPLs.
+        """
+        while True:
+            try:
+                super().cmdloop(intro=intro)
+            except KeyboardInterrupt:
+                self._emit("")
+                self._emit("^C (type 'exit' or 'quit' to leave the shell)")
+                intro = None
+                continue
+            break
+
 
 def main() -> int:
     SearchShell().cmdloop()

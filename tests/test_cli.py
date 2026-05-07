@@ -1,7 +1,9 @@
 """Tests for src.main (the interactive CLI shell)."""
 
+import cmd
 import io
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -164,3 +166,27 @@ class TestExit:
         # If it didn't exit, the cmdloop call would block forever; reaching here
         # means quit worked.
         assert True
+
+
+class TestKeyboardInterrupt:
+    def test_ctrl_c_keeps_shell_alive(self, tmp_path: Path) -> None:
+        """Ctrl+C should be caught: the shell prints a hint and re-enters
+        the loop rather than letting the KeyboardInterrupt escape."""
+        shell = SearchShell(base_url="https://x/", index_path=tmp_path / "i.json")
+        shell.stdout = io.StringIO()
+
+        call_count = {"n": 0}
+
+        def fake_inner_cmdloop(self: cmd.Cmd, intro: object | None = None) -> None:
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                raise KeyboardInterrupt
+            # Second entry: simulate a normal clean exit (e.g. user typed quit).
+            return None
+
+        with patch.object(cmd.Cmd, "cmdloop", fake_inner_cmdloop):
+            shell.cmdloop(intro="")
+
+        assert call_count["n"] == 2
+        assert "^C" in shell.stdout.getvalue()
+        assert "exit" in shell.stdout.getvalue()
