@@ -1,7 +1,7 @@
 # Search Engine Tool
 
-[![CI](https://github.com/OWNER/REPO/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/OWNER/REPO/branch/main/graph/badge.svg)](https://codecov.io/gh/OWNER/REPO)
+[![CI](https://github.com/anhmlpje/Search-Engine-Tool/actions/workflows/ci.yml/badge.svg)](https://github.com/anhmlpje/Search-Engine-Tool/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/anhmlpje/Search-Engine-Tool/branch/main/graph/badge.svg)](https://codecov.io/gh/anhmlpje/Search-Engine-Tool)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
 
 > Status: scaffolding (v0.1). See [PLAN.md](PLAN.md) for the full execution plan.
