@@ -68,8 +68,10 @@ class Crawler:
             yield Page(url=url, html=response.text, title=title)
 
             for link in soup.find_all("a", href=True):
-                absolute = urljoin(url, link["href"])
-                absolute, _ = urldefrag(absolute)
+                href = link.get("href")
+                if not isinstance(href, str):
+                    continue
+                absolute, _ = urldefrag(urljoin(url, href))
                 if urlparse(absolute).netloc == host and absolute not in seen:
                     seen.add(absolute)
                     frontier.append(absolute)
