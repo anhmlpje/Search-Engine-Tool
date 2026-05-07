@@ -49,9 +49,45 @@ def _saved_index(path: Path) -> Path:
     return path
 
 
+def _saved_phrase_index(path: Path) -> Path:
+    """Index where 'good friends' appears as an adjacent phrase in doc_001."""
+    index = SearchIndex(
+        metadata=IndexMetadata(
+            base_url="https://x/",
+            created_at="2026-05-07T12:34:56Z",
+            page_count=2,
+            total_tokens=5,
+            unique_terms=3,
+            politeness_delay_seconds=6.0,
+        ),
+        documents={
+            "doc_001": Document(url="https://x/a", title="A", length=2),
+            "doc_002": Document(url="https://x/b", title="B", length=3),
+        },
+        index={
+            "good": {
+                "doc_001": Posting(freq=1, positions=[0]),
+                "doc_002": Posting(freq=1, positions=[0]),
+            },
+            "friends": {
+                "doc_001": Posting(freq=1, positions=[1]),
+                "doc_002": Posting(freq=1, positions=[2]),
+            },
+            "big": {"doc_002": Posting(freq=1, positions=[1])},
+        },
+    )
+    save(index, path)
+    return path
+
+
 @pytest.fixture
 def saved_index(tmp_path: Path) -> Path:
     return _saved_index(tmp_path / "idx.json")
+
+
+@pytest.fixture
+def saved_phrase_index(tmp_path: Path) -> Path:
+    return _saved_phrase_index(tmp_path / "phrase.json")
 
 
 class TestUnknownAndEmpty:
@@ -153,6 +189,40 @@ class TestFind:
         shell = SearchShell(base_url="https://x/", index_path=saved_index)
         out = _drive(shell, "load", 'find "unbalanced')
         assert "error" in out.lower()
+
+
+class TestFindPhrase:
+    def test_quoted_phrase_routes_to_phrase_search(
+        self, saved_phrase_index: Path
+    ) -> None:
+        shell = SearchShell(base_url="https://x/", index_path=saved_phrase_index)
+        out = _drive(shell, "load", 'find "good friends"')
+        # doc_001 has the phrase adjacent; doc_002 has both words but not adjacent.
+        find_section = out.split("[loaded]")[-1]
+        assert "https://x/a" in find_section
+        assert "https://x/b" not in find_section
+        assert "occurrences=1" in find_section
+
+    def test_phrase_with_no_match_says_no_matches(
+        self, saved_phrase_index: Path
+    ) -> None:
+        shell = SearchShell(base_url="https://x/", index_path=saved_phrase_index)
+        out = _drive(shell, "load", 'find "friends good"')  # reversed -> no match
+        find_section = out.split("[loaded]")[-1]
+        assert "no matches" in find_section
+
+    def test_unquoted_multi_word_uses_and_not_phrase(
+        self, saved_phrase_index: Path
+    ) -> None:
+        # Without quotes, both docs match the AND query (both contain good
+        # AND friends), so doc_002 should appear here -- proving phrase mode
+        # was NOT triggered.
+        shell = SearchShell(base_url="https://x/", index_path=saved_phrase_index)
+        out = _drive(shell, "load", "find good friends")
+        find_section = out.split("[loaded]")[-1]
+        assert "https://x/a" in find_section
+        assert "https://x/b" in find_section
+        assert "tfidf=" in find_section
 
 
 class TestExit:

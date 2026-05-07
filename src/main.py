@@ -15,7 +15,7 @@ from pathlib import Path
 from src.crawler import Crawler, Page
 from src.indexer import build_index
 from src.models import SearchIndex
-from src.search import find, print_word
+from src.search import find, find_phrase, print_word
 from src.storage import (
     IndexCorrupt,
     IndexNotFound,
@@ -117,19 +117,31 @@ class SearchShell(cmd.Cmd):
         self._emit(print_word(self.index, word))
 
     def do_find(self, arg: str) -> None:
-        """Find pages containing all given terms: ``find <term> [term ...]``."""
+        """Find pages by AND query or quoted phrase.
+
+        ``find good friends``     -> AND of two terms, ranked by TF-IDF
+        ``find "good friends"``   -> phrase match, ranked by occurrences
+        """
         if self.index is None:
             self._emit("no index loaded; run 'load' or 'build' first")
             return
         try:
-            terms = shlex.split(arg)
+            items = shlex.split(arg)
         except ValueError as exc:
             self._emit(f"error: {exc}")
             return
-        if not terms:
-            self._emit("usage: find <term> [term ...]")
+        if not items:
+            self._emit("usage: find <term> [term ...]   or   find \"<phrase>\"")
             return
-        results = find(self.index, terms)
+
+        # A single quoted multi-word string -> phrase mode.
+        if len(items) == 1 and " " in items[0]:
+            results = find_phrase(self.index, items[0])
+            mode = "phrase"
+        else:
+            results = find(self.index, items)
+            mode = "and"
+
         if not results:
             self._emit("no matches")
             return
@@ -137,9 +149,10 @@ class SearchShell(cmd.Cmd):
             matched = " ".join(
                 f"{term}={count}" for term, count in result.matched_terms.items()
             )
+            score_label = "occurrences" if mode == "phrase" else "tfidf"
             self._emit(
                 f"{result.rank}. {result.url}  "
-                f"score={result.score:g}  matched=[{matched}]"
+                f"{score_label}={result.score:g}  matched=[{matched}]"
             )
 
     def do_exit(self, _arg: str) -> bool:
