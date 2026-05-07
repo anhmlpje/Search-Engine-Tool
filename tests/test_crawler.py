@@ -1,7 +1,5 @@
 """Tests for src.crawler."""
 
-from __future__ import annotations
-
 import responses
 
 from src.crawler import Crawler

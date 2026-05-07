@@ -1,7 +1,5 @@
 """Polite breadth-first crawler with injectable clock."""
 
-from __future__ import annotations
-
 from collections import deque
 from collections.abc import Iterator
 from dataclasses import dataclass
