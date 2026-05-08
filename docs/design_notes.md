@@ -455,7 +455,7 @@ the `D_t` matching `doc_id`s -- `O(D_t log D_t)` -- and by formatting
 each posting's position list, which adds up to the number of stored
 positions for that term.
 
-The measured 25.9 µs in the benchmark is plausible: for a vocabulary
+The measured 29.4 µs in the benchmark is plausible: for a vocabulary
 where `D_t` is in single digits, sorting cost is negligible and the
 formatting dominates.
 
@@ -489,9 +489,11 @@ iterates the smaller of two sets. The scoring loop walks `D` candidate
 documents and does `O(k)` work per document with TF and IDF treated as
 `O(1)` (in the typical case `IDF` is `O(F x D_t)` but `D_t` is bounded
 by `N` and small for content-bearing terms). The final sort is the
-classical comparison sort over the result list. The 2.95 µs benchmark
-for a three-term AND on a 50-page synthetic corpus confirms that
-`D` is small in practice.
+classical comparison sort over the result list. The measured 14.6 µs
+for a three-term AND on a 50-page synthetic corpus confirms that the
+asymptotic factors are small at this scale; the per-query overhead is
+dominated by the field-aware posting walk and the snippet construction
+rather than the algorithmic phases above.
 
 ### 9.4 `find_phrase`: O(k x D_min) + O(sum_d P0(d) x k)
 
@@ -518,10 +520,12 @@ The inner adjacency check is `O(k)` per starting position, repeated
 for each of the `P0(doc)` first-token positions in each candidate
 document. Summed across the candidate set, the adjacency phase costs
 `O(k x sum_d P0(d))`. In practice this is dominated by documents that
-contain the rarest query token only a handful of times, which is why
-the 30.8 µs benchmark for a two-word phrase against a 50-page corpus
-is competitive with the AND query despite the additional positional
-work.
+contain the rarest query token only a handful of times. The measured
+48.9 µs for a two-word phrase against a 50-page corpus reflects both
+the positional adjacency scan and the per-result snippet construction;
+the phrase variant is roughly three times the cost of the equivalent
+AND query, which is consistent with the additional position-set
+lookups inside the inner loop.
 
 ### 9.5 Notes on simplifications
 

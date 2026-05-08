@@ -191,13 +191,13 @@ Measured with `pytest tests/test_performance.py --benchmark-only` on
 the project conda environment (Python 3.11, Windows, against a
 synthetic 50-page in-memory corpus):
 
-| Operation                              | Mean     | Notes                                    |
-|----------------------------------------|----------|------------------------------------------|
-| Single-word lookup                     | 0.105 us | dictionary access on the term map        |
-| `print word` formatter                 | 25.9 us  | sort by `doc_id` and format posting list |
-| `find` 3-term AND with TF-IDF ranking  | 2.95 us  | set-intersection, score, then rank       |
-| `find "phrase"` two-word phrase scan   | 30.8 us  | adjacency check over position lists      |
-| `build` 50 pages                       | 37.6 ms  | parse, extract, tokenise, accumulate     |
+| Operation                              | Mean     | Notes                                                          |
+|----------------------------------------|----------|----------------------------------------------------------------|
+| Single-word lookup                     | 0.108 us | dictionary access on the term map                              |
+| `print word` formatter                 | 29.4 us  | sort by `doc_id` and format posting list across three fields   |
+| `find` 3-term AND with TF-IDF ranking  | 14.6 us  | per-field posting lookup, intersection, scoring, rank, snippet |
+| `find "phrase"` two-word phrase scan   | 48.9 us  | adjacency check over text positions plus snippet assembly      |
+| `build` 50 pages                       | 37.6 ms  | parse HTML, extract three fields, tokenise, accumulate         |
 
 Complexity, in big-O terms over `N` documents, `T` unique terms, and
 `L` average document length:
