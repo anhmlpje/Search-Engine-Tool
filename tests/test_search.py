@@ -474,3 +474,46 @@ class TestFindPhrase:
         for result in results:
             assert "[GOOD]" in result.snippet
             assert "[FRIENDS]" in result.snippet
+
+    def test_phrase_results_have_no_breakdown(self) -> None:
+        # Phrase score is an occurrence count, not a TF-IDF sum.
+        results = find_phrase(_phrase_index(), "good friends")
+        for result in results:
+            assert result.breakdown == []
+
+
+# --- Explain breakdown ------------------------------------------------------
+
+
+class TestExplainBreakdown:
+    def test_breakdown_matches_hand_computed_values(self) -> None:
+        # Same fixture as TestTfIdfRanking. doc_001 has good x2 in length 3.
+        results = find(_three_doc_tfidf_index(), ["good"])
+        idf_good = math.log(3 / 2)
+        result_001 = next(r for r in results if r.doc_id == "doc_001")
+        assert len(result_001.breakdown) == 1
+        contribution = result_001.breakdown[0]
+        assert contribution.label == "good"
+        assert contribution.freq == 2
+        assert contribution.tf == 2 / 3
+        assert contribution.idf == idf_good
+        assert contribution.tfidf == (2 / 3) * idf_good
+
+    def test_breakdown_sums_to_score(self) -> None:
+        # The result.score is the sum of per-term tfidf contributions.
+        results = find(_two_doc_index(), ["hello", "world"])
+        for result in results:
+            total = sum(c.tfidf for c in result.breakdown)
+            assert result.score == total
+
+    def test_breakdown_label_includes_field_prefix(self) -> None:
+        results = find(_fielded_index(), ["love", "author:wilde"])
+        labels = [c.label for c in results[0].breakdown]
+        assert "love" in labels
+        assert "author:wilde" in labels
+
+    def test_breakdown_present_for_every_query_term(self) -> None:
+        results = find(_three_doc_tfidf_index(), ["good", "cat"])
+        # Only doc_001 has both; one breakdown entry per query term.
+        assert len(results) == 1
+        assert len(results[0].breakdown) == 2

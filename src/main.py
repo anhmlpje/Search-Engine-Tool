@@ -123,8 +123,13 @@ class SearchShell(cmd.Cmd):
     def do_find(self, arg: str) -> None:
         """Find pages by AND query or quoted phrase.
 
-        ``find good friends``     -> AND of two terms, ranked by TF-IDF
-        ``find "good friends"``   -> phrase match, ranked by occurrences
+        ``find good friends``            -> AND of two terms, ranked by TF-IDF
+        ``find "good friends"``          -> phrase match, ranked by occurrences
+        ``find --explain good friends``  -> AND query, plus per-term TF-IDF
+                                            arithmetic for every result
+
+        ``--explain`` is silently ignored for phrase queries because the
+        phrase score is an occurrence count, not a TF-IDF sum.
         """
         if self.index is None:
             self._emit("no index loaded; run 'load' or 'build' first")
@@ -134,6 +139,11 @@ class SearchShell(cmd.Cmd):
         except ValueError as exc:
             self._emit(f"error: {exc}")
             return
+
+        explain = "--explain" in items
+        if explain:
+            items = [item for item in items if item != "--explain"]
+
         if not items:
             self._emit("usage: find <term> [term ...]   or   find \"<phrase>\"")
             return
@@ -164,6 +174,15 @@ class SearchShell(cmd.Cmd):
             )
             if result.snippet:
                 self._emit(f"   {result.snippet}")
+            if explain and result.breakdown:
+                for contribution in result.breakdown:
+                    self._emit(
+                        f"   {contribution.label:<20} "
+                        f"freq={contribution.freq}  "
+                        f"tf={contribution.tf:.6f}  "
+                        f"idf={contribution.idf:.6f}  "
+                        f"tfidf={contribution.tfidf:.6f}"
+                    )
 
     def do_stats(self, _arg: str) -> None:
         """Show the index summary plus the 20 most frequent tokens.

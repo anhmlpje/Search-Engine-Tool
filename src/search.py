@@ -32,6 +32,17 @@ SNIPPET_WINDOW = 6
 
 
 @dataclass
+class TermContribution:
+    """Per-term TF-IDF arithmetic for one document, for ``--explain`` mode."""
+
+    label: str  # bare term, e.g. "good", or fielded, e.g. "author:wilde"
+    freq: int
+    tf: float
+    idf: float
+    tfidf: float
+
+
+@dataclass
 class FindResult:
     """A single document matching a query."""
 
@@ -41,6 +52,7 @@ class FindResult:
     matched_terms: dict[str, int] = field(default_factory=dict)
     rank: int = 0
     snippet: str = ""
+    breakdown: list[TermContribution] = field(default_factory=list)
 
 
 # --- Single-word inspection -----------------------------------------------
@@ -239,12 +251,25 @@ def find(index: SearchIndex, items: list[str]) -> list[FindResult]:
         doc = index.documents[doc_id]
         score = 0.0
         matched: dict[str, int] = {}
+        breakdown: list[TermContribution] = []
         for i, (query_field, term) in enumerate(parsed):
             field_postings = per_item_postings[i][doc_id]
             term_freq = sum(p.freq for p in field_postings.values())
-            score += _tf(term_freq, doc.length) * _idf(index, query_field, term)
+            tf_val = _tf(term_freq, doc.length)
+            idf_val = _idf(index, query_field, term)
+            tfidf_val = tf_val * idf_val
+            score += tfidf_val
             label = f"{query_field}:{term}" if query_field else term
             matched[label] = term_freq
+            breakdown.append(
+                TermContribution(
+                    label=label,
+                    freq=term_freq,
+                    tf=tf_val,
+                    idf=idf_val,
+                    tfidf=tfidf_val,
+                )
+            )
         snippet = _build_snippet(index, doc_id, parsed, per_item_postings)
         results.append(
             FindResult(
@@ -253,6 +278,7 @@ def find(index: SearchIndex, items: list[str]) -> list[FindResult]:
                 score=score,
                 matched_terms=matched,
                 snippet=snippet,
+                breakdown=breakdown,
             )
         )
 

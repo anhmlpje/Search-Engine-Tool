@@ -209,6 +209,25 @@ length, `idf` is log(N / df) where df is computed against the field
 restriction when one is supplied, or across the union of fields when
 the query is bare.
 
+### Score-explanation mode
+
+The `find` command accepts an optional `--explain` flag that prints the
+per-term TF-IDF arithmetic alongside every result: the document
+frequency, the per-document term frequency, the inverse document
+frequency, and their product. The default output is unchanged when the
+flag is absent, so the addition is opt-in. The flag silently does
+nothing on phrase queries because the phrase score is an occurrence
+count rather than a TF-IDF sum.
+
+The motivation is auditability: with `--explain`, every ranking number
+in the output is reconstructible from the printed posting list (via
+`print`) plus the arithmetic in `docs/design_notes.md` section 4. The
+ranking is no longer a black box; the reader can verify by hand that
+the implementation matches the formula. The implementation cost is
+small: TF and IDF are already computed inside `find` while assembling
+the score, so the `--explain` mode just exposes the intermediate
+values that were always present.
+
 ### Match snippets
 
 Each document now stores its raw lower-cased token sequence per field.

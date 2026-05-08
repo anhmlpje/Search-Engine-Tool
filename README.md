@@ -97,6 +97,7 @@ commands, malformed input, or `Ctrl+C`.
 |--------------------------|-------------------------------------------------------------------------------------------------------------------|
 | `find "<phrase>"`        | Phrase search: text-field documents matched only when the tokens of the phrase appear at consecutive positions.   |
 | `find <field>:<term>`    | Fielded search: restrict a term to a specific field (`text`, `author`, or `tag`). Mix with bare terms freely.     |
+| `find --explain <terms>` | Show the per-term TF-IDF arithmetic (`freq`, `tf`, `idf`, `tfidf`) for every matched document; default off.       |
 | `stats`                  | Index summary plus the 20 most frequent tokens; useful for sanity-checking the tokenisation distribution.         |
 | `help`                   | List commands with one-line descriptions.                                                                         |
 | `exit` / `quit`          | Leave the shell.                                                                                                  |

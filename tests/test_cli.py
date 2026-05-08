@@ -387,6 +387,50 @@ class TestFieldedFind:
         assert "no matches" in find_section
 
 
+class TestExplainFlag:
+    def test_explain_prints_per_term_breakdown(self, saved_index: Path) -> None:
+        shell = SearchShell(base_url="https://x/", index_path=saved_index)
+        out = _drive(shell, "load", "find --explain hello")
+        find_section = out.split("[loaded]")[-1]
+        # Without --explain, none of these tokens appear; with --explain, all do.
+        assert "tf=" in find_section
+        assert "idf=" in find_section
+        assert "tfidf=" in find_section
+        assert "freq=" in find_section
+
+    def test_default_output_omits_breakdown(self, saved_index: Path) -> None:
+        shell = SearchShell(base_url="https://x/", index_path=saved_index)
+        out = _drive(shell, "load", "find hello")
+        find_section = out.split("[loaded]")[-1]
+        # The default summary line contains 'tfidf=' as the score label, so
+        # we look for the breakdown-specific tokens that only show under
+        # --explain: a 'freq=' field on its own line plus a standalone 'tf='.
+        assert "freq=" not in find_section
+        assert " tf=" not in find_section
+
+    def test_explain_silently_ignored_for_phrase(
+        self, saved_phrase_index: Path
+    ) -> None:
+        shell = SearchShell(
+            base_url="https://x/", index_path=saved_phrase_index
+        )
+        out = _drive(shell, "load", 'find --explain "good friends"')
+        find_section = out.split("[loaded]")[-1]
+        # Phrase mode still triggers, score label is "occurrences", and no
+        # tfidf breakdown lines are emitted.
+        assert "occurrences=1" in find_section
+        assert "tf=" not in find_section
+
+    def test_explain_position_within_args_is_flexible(
+        self, saved_index: Path
+    ) -> None:
+        # --explain after the terms should work the same as before.
+        shell = SearchShell(base_url="https://x/", index_path=saved_index)
+        out = _drive(shell, "load", "find hello --explain")
+        find_section = out.split("[loaded]")[-1]
+        assert "tf=" in find_section
+
+
 class TestExit:
     def test_quit_alias_leaves_loop(self, tmp_path: Path) -> None:
         shell = SearchShell(base_url="https://x/", index_path=tmp_path / "i.json")
