@@ -253,10 +253,11 @@ and serves as a live demonstration that the implementation matches the
 formula in `design_notes.md`.
 
 **Schema impact.** Enabling extensions bumps the on-disk schema to version
-2: postings are nested under field names, and each document carries a
-`tokens` array. A v1 file remains loadable and behaves as a
-single-field index. The version check in `storage.load` distinguishes the
-two and adapts the in-memory shape accordingly.
+2: postings are nested under field names, and each document carries
+per-field token streams. The version check in `storage.load` rejects v1
+files explicitly with a "rebuild required" message rather than carrying
+silent migration code; this is documented as a deliberate simplicity-
+over-compatibility choice in `docs/design_notes.md` section 7.
 
 ---
 
@@ -431,7 +432,8 @@ and `--explain`), and the corresponding test files.
 6. Update `tests/test_search.py` and `tests/test_storage.py` to cover:
    field-prefixed queries; cross-field default behaviour; snippet
    correctness on hand-crafted token sequences; `--explain` arithmetic
-   verified against hand-computed values; v1 file loaded under v2 code.
+   verified against hand-computed values; v1 file rejected with a clear
+   "rebuild required" message under v2 code.
 7. Update `README.md`'s command reference and schema section, and add a
    short "Extensions" subsection in `docs/design_notes.md` explaining how
    each extension reuses existing data rather than duplicating it.
@@ -442,7 +444,7 @@ and `--explain`), and the corresponding test files.
 - `find friends` prints results with bracketed snippets around the match.
 - `find --explain good friends` prints a per-term TF-IDF breakdown whose
   numbers match the values in `design_notes.md`.
-- A v1 index file from the `v0.9-rc` tag still loads without error.
+- A v1 index file from the `v0.9-rc` tag is rejected by `load` with a clear "schema v1 ... run 'build' to regenerate" message, and a fresh `build` produces a v2 file that loads cleanly.
 - CI remains green at coverage >= 90%.
 
 **Tag.** `v0.95-extensions`.

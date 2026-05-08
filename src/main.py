@@ -225,6 +225,17 @@ class SearchShell(cmd.Cmd):
         self._emit(f"unknown command: {head}")
         self._emit("type 'help' for available commands")
 
+    def onecmd(self, line: str) -> bool:
+        """Override to make the *command keyword* case-insensitive while
+        leaving the argument body alone -- so ``HELP`` works the same as
+        ``help``, but ``find Albert`` still passes ``Albert`` through.
+        """
+        if not isinstance(line, str) or not line.strip():
+            return super().onecmd(line)
+        head, sep, rest = line.partition(" ")
+        normalised = head.lower() + sep + rest
+        return super().onecmd(normalised)
+
     def cmdloop(self, intro: object | None = None) -> None:
         """Wrap the inherited loop so Ctrl+C cancels the current input
         without exiting the shell -- the user must type 'exit' or 'quit'

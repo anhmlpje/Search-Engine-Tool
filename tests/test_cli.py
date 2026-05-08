@@ -431,6 +431,28 @@ class TestExplainFlag:
         assert "tf=" in find_section
 
 
+class TestCaseInsensitive:
+    def test_command_keyword_uppercase_routes_to_handler(
+        self, saved_index: Path
+    ) -> None:
+        shell = SearchShell(base_url="https://x/", index_path=saved_index)
+        out = _drive(shell, "LOAD", "PRINT hello")
+        # Should hit do_load + do_print and produce a posting list, not
+        # the "unknown command" fallthrough.
+        assert "[loaded]" in out
+        assert "doc_001" in out
+        assert "unknown command" not in out
+
+    def test_argument_case_preserved(self, saved_index: Path) -> None:
+        shell = SearchShell(base_url="https://x/", index_path=saved_index)
+        # The print command lowercases via tokeniser, so HELLO matches hello.
+        # This test confirms the *argument* still reaches do_print
+        # (case-folding is the tokeniser's job, not the dispatcher's).
+        out = _drive(shell, "load", "PRINT HELLO")
+        assert "doc_001" in out
+        assert "unknown command" not in out
+
+
 class TestExit:
     def test_quit_alias_leaves_loop(self, tmp_path: Path) -> None:
         shell = SearchShell(base_url="https://x/", index_path=tmp_path / "i.json")

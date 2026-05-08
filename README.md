@@ -169,7 +169,7 @@ distinct exception type before any parsing of the inner structure.
 
 ```jsonc
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "metadata": {
     "base_url": "https://quotes.toscrape.com/",
     "created_at": "2026-05-07T12:34:56Z",
@@ -179,18 +179,47 @@ distinct exception type before any parsing of the inner structure.
     "politeness_delay_seconds": 6.0
   },
   "documents": {
-    "doc_001": { "url": "https://...", "title": "...", "length": 87 }
+    "doc_001": {
+      "url": "https://...",
+      "title": "...",
+      "length": 87,
+      "fields": {
+        "text":   { "length": 64, "tokens": ["the", "world", "is", "good", ...] },
+        "author": { "length": 4,  "tokens": ["mark", "twain", ...] },
+        "tag":    { "length": 19, "tokens": ["world", "good", ...] }
+      }
+    }
   },
   "index": {
-    "good": {
-      "doc_001": { "freq": 2, "positions": [3, 17] }
+    "text": {
+      "good": { "doc_001": { "freq": 2, "positions": [3, 17] } }
+    },
+    "author": {
+      "twain": { "doc_001": { "freq": 1, "positions": [1] } }
+    },
+    "tag": {
+      "good": { "doc_001": { "freq": 1, "positions": [1] } }
     }
   }
 }
 ```
 
 `Posting.freq` is always equal to `len(Posting.positions)`; the test
-suite enforces this invariant across every term in a built index.
+suite enforces this invariant across every term in a built index. A
+schema-v1 file produced by an earlier build will be rejected by
+`load` with a clear "rebuild required" message rather than silently
+reinterpreted under the v2 shape.
+
+### Query-item granularity
+
+Each item in a `find` query is parsed as a single token after
+tokenisation. A hyphenated input such as `find good-friends` therefore
+treats `good-friends` as a request for the single word `good` (the
+first token produced by the tokeniser) and silently drops `friends`;
+to match both, write `find good friends`. Likewise, `find
+author:oscar-wilde` searches the author field for `oscar` only. This
+is a deliberate simplification of the query parser; if you need
+multi-token semantics, separate the words at the CLI with whitespace.
 
 ## Performance
 
