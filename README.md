@@ -3,6 +3,12 @@
 [![CI](https://github.com/anhmlpje/Search-Engine-Tool/actions/workflows/ci.yml/badge.svg)](https://github.com/anhmlpje/Search-Engine-Tool/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
 
+> **Status: v1.0 submission release.** The compiled index file ships in
+> [`data/index.json`](data/index.json) (schema v2, 214 pages, 29918
+> tokens, 4503 unique terms). See [PLAN.md](PLAN.md) for the full
+> execution plan and [docs/design_notes.md](docs/design_notes.md) for the
+> algorithmic rationale.
+
 An inverted-index search engine over [quotes.toscrape.com](https://quotes.toscrape.com/),
 exposed as an interactive command-line shell. Crawls the site politely,
 builds a positional inverted index over the page contents, and answers
