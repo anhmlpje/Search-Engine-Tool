@@ -7,6 +7,7 @@ import pytest
 
 from src.models import (
     Document,
+    FieldData,
     IndexMetadata,
     Posting,
     SearchIndex,
@@ -30,10 +31,25 @@ def _tiny_index() -> SearchIndex:
             unique_terms=2,
             politeness_delay_seconds=6.0,
         ),
-        documents={"doc_001": Document(url="https://x/", title="X", length=2)},
+        documents={
+            "doc_001": Document(
+                url="https://x/",
+                title="X",
+                length=2,
+                fields={
+                    "text": FieldData(length=2, tokens=["hello", "world"]),
+                    "author": FieldData(length=0, tokens=[]),
+                    "tag": FieldData(length=0, tokens=[]),
+                },
+            )
+        },
         index={
-            "hello": {"doc_001": Posting(freq=1, positions=[0])},
-            "world": {"doc_001": Posting(freq=1, positions=[1])},
+            "text": {
+                "hello": {"doc_001": Posting(freq=1, positions=[0])},
+                "world": {"doc_001": Posting(freq=1, positions=[1])},
+            },
+            "author": {},
+            "tag": {},
         },
     )
 
@@ -44,15 +60,17 @@ class TestSave:
         save(_tiny_index(), path)
         assert path.exists()
 
-    def test_writes_valid_json(self, tmp_path: Path) -> None:
+    def test_writes_valid_json_with_schema_version_2(self, tmp_path: Path) -> None:
         path = tmp_path / "idx.json"
         save(_tiny_index(), path)
         with path.open("r", encoding="utf-8") as fh:
             data = json.load(fh)
-        assert data["schema_version"] == 1
+        assert data["schema_version"] == 2
         assert "metadata" in data
         assert "documents" in data
         assert "index" in data
+        # Index is now nested by field
+        assert "text" in data["index"]
 
 
 class TestLoad:
@@ -78,6 +96,25 @@ class TestLoad:
         path.write_text("[1, 2, 3]", encoding="utf-8")
         with pytest.raises(IndexCorrupt):
             load(path)
+
+    def test_v1_schema_rejected_with_helpful_message(self, tmp_path: Path) -> None:
+        path = tmp_path / "v1.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "metadata": {},
+                    "documents": {},
+                    "index": {},
+                }
+            ),
+            encoding="utf-8",
+        )
+        with pytest.raises(SchemaMismatch) as exc_info:
+            load(path)
+        message = str(exc_info.value)
+        assert "v1" in message
+        assert "build" in message.lower()  # message tells user to rebuild
 
     def test_higher_schema_version_raises_mismatch(self, tmp_path: Path) -> None:
         path = tmp_path / "v999.json"

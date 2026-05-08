@@ -93,16 +93,35 @@ commands, malformed input, or `Ctrl+C`.
 
 ### Auxiliary
 
-| Command              | Description                                                                                                       |
-|----------------------|-------------------------------------------------------------------------------------------------------------------|
-| `find "<phrase>"`    | Phrase search: documents are matched only when the tokens of the phrase appear at consecutive positions.          |
-| `stats`              | Index summary plus the 20 most frequent tokens; useful for sanity-checking the tokenisation distribution.         |
-| `help`               | List commands with one-line descriptions.                                                                         |
-| `exit` / `quit`      | Leave the shell.                                                                                                  |
+| Command                  | Description                                                                                                       |
+|--------------------------|-------------------------------------------------------------------------------------------------------------------|
+| `find "<phrase>"`        | Phrase search: text-field documents matched only when the tokens of the phrase appear at consecutive positions.   |
+| `find <field>:<term>`    | Fielded search: restrict a term to a specific field (`text`, `author`, or `tag`). Mix with bare terms freely.     |
+| `find --explain <terms>` | Show the per-term TF-IDF arithmetic (`freq`, `tf`, `idf`, `tfidf`) for every matched document; default off.       |
+| `stats`                  | Index summary plus the 20 most frequent tokens; useful for sanity-checking the tokenisation distribution.         |
+| `help`                   | List commands with one-line descriptions.                                                                         |
+| `exit` / `quit`          | Leave the shell.                                                                                                  |
 
 Query input is run through the same tokeniser the index was built with,
 so `find good!` matches the indexed word `good`, and `find "good friends"`
-finds the phrase even if the user writes it with smart quotes.
+finds the phrase even if the user writes it with smart quotes. `find`
+results carry a short context snippet drawn from the document's stored
+text tokens, with matched terms wrapped in brackets:
+
+```text
+1. https://...quote-page/  tfidf=0.0349  matched=[good=2 friends=1]
+   ...the world is full of [GOOD] [FRIENDS] who...
+```
+
+The example below shows fielded queries:
+
+```text
+> find author:wilde
+1. https://quotes.toscrape.com/author/Oscar-Wilde  tfidf=...  matched=[author:wilde=1]
+
+> find love author:wilde
+1. https://quotes.toscrape.com/...  tfidf=...  matched=[love=2 author:wilde=1]
+```
 
 ## Architecture
 
@@ -173,13 +192,13 @@ Measured with `pytest tests/test_performance.py --benchmark-only` on
 the project conda environment (Python 3.11, Windows, against a
 synthetic 50-page in-memory corpus):
 
-| Operation                              | Mean     | Notes                                    |
-|----------------------------------------|----------|------------------------------------------|
-| Single-word lookup                     | 0.105 us | dictionary access on the term map        |
-| `print word` formatter                 | 25.9 us  | sort by `doc_id` and format posting list |
-| `find` 3-term AND with TF-IDF ranking  | 2.95 us  | set-intersection, score, then rank       |
-| `find "phrase"` two-word phrase scan   | 30.8 us  | adjacency check over position lists      |
-| `build` 50 pages                       | 37.6 ms  | parse, extract, tokenise, accumulate     |
+| Operation                              | Mean     | Notes                                                          |
+|----------------------------------------|----------|----------------------------------------------------------------|
+| Single-word lookup                     | 0.108 us | dictionary access on the term map                              |
+| `print word` formatter                 | 29.4 us  | sort by `doc_id` and format posting list across three fields   |
+| `find` 3-term AND with TF-IDF ranking  | 14.6 us  | per-field posting lookup, intersection, scoring, rank, snippet |
+| `find "phrase"` two-word phrase scan   | 48.9 us  | adjacency check over text positions plus snippet assembly      |
+| `build` 50 pages                       | 37.6 ms  | parse HTML, extract three fields, tokenise, accumulate         |
 
 Complexity, in big-O terms over `N` documents, `T` unique terms, and
 `L` average document length:

@@ -23,7 +23,7 @@ from src.storage import (
     load,
     save,
 )
-from src.utils import tokenize
+from src.utils import tokenize  # used by do_print to normalise input
 
 DEFAULT_INDEX_PATH = Path("data/index.json")
 DEFAULT_BASE_URL = "https://quotes.toscrape.com/"
@@ -123,8 +123,13 @@ class SearchShell(cmd.Cmd):
     def do_find(self, arg: str) -> None:
         """Find pages by AND query or quoted phrase.
 
-        ``find good friends``     -> AND of two terms, ranked by TF-IDF
-        ``find "good friends"``   -> phrase match, ranked by occurrences
+        ``find good friends``            -> AND of two terms, ranked by TF-IDF
+        ``find "good friends"``          -> phrase match, ranked by occurrences
+        ``find --explain good friends``  -> AND query, plus per-term TF-IDF
+                                            arithmetic for every result
+
+        ``--explain`` is silently ignored for phrase queries because the
+        phrase score is an occurrence count, not a TF-IDF sum.
         """
         if self.index is None:
             self._emit("no index loaded; run 'load' or 'build' first")
@@ -134,6 +139,11 @@ class SearchShell(cmd.Cmd):
         except ValueError as exc:
             self._emit(f"error: {exc}")
             return
+
+        explain = "--explain" in items
+        if explain:
+            items = [item for item in items if item != "--explain"]
+
         if not items:
             self._emit("usage: find <term> [term ...]   or   find \"<phrase>\"")
             return
@@ -145,17 +155,9 @@ class SearchShell(cmd.Cmd):
             results = find_phrase(self.index, items[0])
             mode = "phrase"
         else:
-            # Tokenise each bare term the same way the indexer did, so that
-            # "find good!" or "find good, friends" still matches the indexed
-            # words. tokenize() returns zero or more tokens per input item;
-            # we flatten and skip empty results.
-            terms: list[str] = []
-            for item in items:
-                terms.extend(tokenize(item))
-            if not terms:
-                self._emit("usage: find <term> [term ...]   or   find \"<phrase>\"")
-                return
-            results = find(self.index, terms)
+            # find() parses field:term syntax and tokenises the term half
+            # internally, so we pass the raw items through unchanged.
+            results = find(self.index, items)
             mode = "and"
 
         if not results:
@@ -170,6 +172,17 @@ class SearchShell(cmd.Cmd):
                 f"{result.rank}. {result.url}  "
                 f"{score_label}={result.score:g}  matched=[{matched}]"
             )
+            if result.snippet:
+                self._emit(f"   {result.snippet}")
+            if explain and result.breakdown:
+                for contribution in result.breakdown:
+                    self._emit(
+                        f"   {contribution.label:<20} "
+                        f"freq={contribution.freq}  "
+                        f"tf={contribution.tf:.6f}  "
+                        f"idf={contribution.idf:.6f}  "
+                        f"tfidf={contribution.tfidf:.6f}"
+                    )
 
     def do_stats(self, _arg: str) -> None:
         """Show the index summary plus the 20 most frequent tokens.
@@ -182,11 +195,15 @@ class SearchShell(cmd.Cmd):
             return
         self._emit_index_summary(self.index, "[stats]")
 
-        term_totals = [
-            (term, sum(p.freq for p in postings.values()))
-            for term, postings in self.index.index.items()
-        ]
-        term_totals.sort(key=lambda t: (-t[1], t[0]))
+        # Aggregate term frequency across every field, so that a token
+        # appearing in both text and tag is summed.
+        per_term: dict[str, int] = {}
+        for field_index in self.index.index.values():
+            for term, postings in field_index.items():
+                per_term[term] = per_term.get(term, 0) + sum(
+                    p.freq for p in postings.values()
+                )
+        term_totals = sorted(per_term.items(), key=lambda t: (-t[1], t[0]))
 
         self._emit("top 20 tokens by total corpus frequency:")
         for rank, (term, total) in enumerate(term_totals[:20], start=1):

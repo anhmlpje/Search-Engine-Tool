@@ -1,14 +1,31 @@
 """Data classes for documents, postings, metadata, and the search index.
 
-These classes know how to convert themselves to and from plain ``dict``
-representations so that the storage layer (Phase 3) can serialise the index
-to JSON without needing to know any of the field details.
+Schema version 2 introduces *fielded* indexing: each document carries
+multiple per-field token streams (text, author, tag), and the inverted
+index nests by field. This lets the CLI route ``field:term`` queries to
+a specific field's posting list and lets the search layer build context
+snippets from the document's stored token stream without re-parsing HTML.
 """
 
 from dataclasses import dataclass
 from typing import Any
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
+
+
+@dataclass
+class FieldData:
+    """A single document's content in one indexable field."""
+
+    length: int  # token count for this field
+    tokens: list[str]  # raw lowercase tokens, used for snippet generation
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"length": self.length, "tokens": list(self.tokens)}
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "FieldData":
+        return cls(length=int(data["length"]), tokens=list(data["tokens"]))
 
 
 @dataclass
@@ -17,22 +34,36 @@ class Document:
 
     url: str
     title: str
-    length: int  # number of tokens after tokenisation
+    length: int  # total token count across all fields
+    fields: dict[str, FieldData]
 
     def to_dict(self) -> dict[str, Any]:
-        return {"url": self.url, "title": self.title, "length": self.length}
+        return {
+            "url": self.url,
+            "title": self.title,
+            "length": self.length,
+            "fields": {name: fd.to_dict() for name, fd in self.fields.items()},
+        }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Document":
-        return cls(url=data["url"], title=data["title"], length=data["length"])
+        return cls(
+            url=data["url"],
+            title=data["title"],
+            length=int(data["length"]),
+            fields={
+                name: FieldData.from_dict(fd_data)
+                for name, fd_data in data["fields"].items()
+            },
+        )
 
 
 @dataclass
 class Posting:
-    """A single ``(term, document)`` entry in the inverted index."""
+    """A single ``(term, document)`` entry in a field's inverted index."""
 
     freq: int
-    positions: list[int]  # zero-indexed token offsets in the document
+    positions: list[int]  # token offsets within the field's token stream
 
     def to_dict(self) -> dict[str, Any]:
         return {"freq": self.freq, "positions": list(self.positions)}
@@ -47,7 +78,7 @@ class IndexMetadata:
     """Top-level index summary for the on-disk JSON file."""
 
     base_url: str
-    created_at: str  # ISO 8601 UTC, e.g. "2026-05-07T12:34:56Z"
+    created_at: str
     page_count: int
     total_tokens: int
     unique_terms: int
@@ -77,16 +108,15 @@ class IndexMetadata:
 
 @dataclass
 class SearchIndex:
-    """The complete in-memory search index.
+    """The complete in-memory search index, fielded.
 
-    The on-disk JSON form is produced by :meth:`to_dict`, which embeds
-    :data:`SCHEMA_VERSION` so that the storage layer can validate the file
-    on load.
+    ``index`` is keyed first by field name (``text`` / ``author`` / ``tag``),
+    then by term, then by ``doc_id``. Each leaf is a :class:`Posting`.
     """
 
     metadata: IndexMetadata
-    documents: dict[str, Document]  # doc_id -> Document
-    index: dict[str, dict[str, Posting]]  # term -> doc_id -> Posting
+    documents: dict[str, Document]
+    index: dict[str, dict[str, dict[str, Posting]]]
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -96,10 +126,14 @@ class SearchIndex:
                 doc_id: doc.to_dict() for doc_id, doc in self.documents.items()
             },
             "index": {
-                term: {
-                    doc_id: posting.to_dict() for doc_id, posting in postings.items()
+                field: {
+                    term: {
+                        doc_id: posting.to_dict()
+                        for doc_id, posting in postings.items()
+                    }
+                    for term, postings in field_index.items()
                 }
-                for term, postings in self.index.items()
+                for field, field_index in self.index.items()
             },
         }
 
@@ -112,9 +146,13 @@ class SearchIndex:
                 for doc_id, d in data["documents"].items()
             },
             index={
-                term: {
-                    doc_id: Posting.from_dict(p) for doc_id, p in postings.items()
+                field: {
+                    term: {
+                        doc_id: Posting.from_dict(p)
+                        for doc_id, p in postings.items()
+                    }
+                    for term, postings in field_index.items()
                 }
-                for term, postings in data["index"].items()
+                for field, field_index in data["index"].items()
             },
         )

@@ -1,10 +1,10 @@
-"""Inverted-index construction from crawled pages.
+"""Field-aware inverted-index construction from crawled pages.
 
-Extracts the indexable semantic content from each page (quote text, author
-names, tag lists, and author biographies on /author/ pages), tokenises it,
-and produces a :class:`SearchIndex`. Site chrome -- navigation, pagination,
-and footer -- is deliberately excluded so that words appearing on every
-page do not dominate the index without informing relevance.
+Each indexed document is split into three named fields -- ``text``,
+``author``, and ``tag`` -- with independent token streams and posting
+lists. This lets the search layer route ``field:term`` queries and lets
+``find`` show a context snippet drawn from the stored ``text`` tokens
+without re-parsing HTML.
 """
 
 from collections.abc import Iterable
@@ -13,44 +13,57 @@ from datetime import datetime, timezone
 from bs4 import BeautifulSoup
 
 from src.crawler import Page
-from src.models import Document, IndexMetadata, Posting, SearchIndex
+from src.models import (
+    Document,
+    FieldData,
+    IndexMetadata,
+    Posting,
+    SearchIndex,
+)
 from src.utils import tokenize
 
 
-def extract_text(html: str) -> str:
-    """Return the indexable text content of a quotes.toscrape.com page.
+FIELD_NAMES = ("text", "author", "tag")
 
-    Two layouts are recognised:
 
-    1. List pages (homepage, ``/page/N/``, ``/tag/X/``) carry one or more
-       ``.quote`` divs -- text, author, and tag links are kept.
-    2. Author detail pages (``/author/Name/``) carry a single
-       ``.author-title`` plus an ``.author-description`` biography.
+def extract_fields(html: str) -> dict[str, str]:
+    """Return per-field text content for a quotes.toscrape.com page.
 
-    Anything else (login form, navigation only) yields the empty string,
-    which means it contributes no tokens to the index.
+    On list pages (homepage, ``/page/N/``, ``/tag/X/``) each ``.quote``
+    block contributes its ``.text`` to the *text* field, its ``.author``
+    to the *author* field, and each ``.tag`` to the *tag* field. On
+    author detail pages (``/author/Name/``) the ``.author-title`` is added
+    to the *author* field and the ``.author-description`` body to the
+    *text* field. Site chrome (navigation, pagination, footer) is
+    ignored, as documented in design_notes.md.
     """
     soup = BeautifulSoup(html, "html.parser")
-    parts: list[str] = []
+    text_parts: list[str] = []
+    author_parts: list[str] = []
+    tag_parts: list[str] = []
 
     for quote in soup.select(".quote"):
         text_el = quote.select_one(".text")
-        author_el = quote.select_one(".author")
         if text_el:
-            parts.append(text_el.get_text())
+            text_parts.append(text_el.get_text())
+        author_el = quote.select_one(".author")
         if author_el:
-            parts.append(author_el.get_text())
+            author_parts.append(author_el.get_text())
         for tag in quote.select(".tags .tag"):
-            parts.append(tag.get_text())
+            tag_parts.append(tag.get_text())
 
     title_el = soup.select_one(".author-title")
     if title_el:
-        parts.append(title_el.get_text())
+        author_parts.append(title_el.get_text())
     description_el = soup.select_one(".author-description")
     if description_el:
-        parts.append(description_el.get_text())
+        text_parts.append(description_el.get_text())
 
-    return " ".join(parts)
+    return {
+        "text": " ".join(text_parts),
+        "author": " ".join(author_parts),
+        "tag": " ".join(tag_parts),
+    }
 
 
 def _now_utc_iso() -> str:
@@ -63,40 +76,58 @@ def build_index(
     *,
     politeness_delay_seconds: float = 6.0,
 ) -> SearchIndex:
-    """Consume crawled pages and produce a :class:`SearchIndex`.
+    """Consume crawled pages and produce a fielded :class:`SearchIndex`.
 
-    Pages are consumed lazily, so the iterable can come straight from the
-    crawler without buffering the whole site in memory. Document IDs are
-    assigned in iteration order as ``doc_001``, ``doc_002``, ...
+    Pages are consumed lazily so the iterable can come straight from the
+    crawler. Document IDs are assigned in iteration order as ``doc_001``,
+    ``doc_002``, ...
     """
     documents: dict[str, Document] = {}
-    index: dict[str, dict[str, Posting]] = {}
+    index: dict[str, dict[str, dict[str, Posting]]] = {
+        name: {} for name in FIELD_NAMES
+    }
     total_tokens = 0
 
     for ordinal, page in enumerate(pages, start=1):
         doc_id = f"doc_{ordinal:03d}"
-        tokens = tokenize(extract_text(page.html))
+        fields_text = extract_fields(page.html)
 
+        field_data: dict[str, FieldData] = {}
+        for field_name in FIELD_NAMES:
+            tokens = tokenize(fields_text.get(field_name, ""))
+            field_data[field_name] = FieldData(length=len(tokens), tokens=tokens)
+
+            field_index = index[field_name]
+            for position, token in enumerate(tokens):
+                postings = field_index.setdefault(token, {})
+                posting = postings.get(doc_id)
+                if posting is None:
+                    posting = Posting(freq=0, positions=[])
+                    postings[doc_id] = posting
+                posting.freq += 1
+                posting.positions.append(position)
+
+        doc_total = sum(fd.length for fd in field_data.values())
         documents[doc_id] = Document(
-            url=page.url, title=page.title, length=len(tokens)
+            url=page.url,
+            title=page.title,
+            length=doc_total,
+            fields=field_data,
         )
-        total_tokens += len(tokens)
+        total_tokens += doc_total
 
-        for position, token in enumerate(tokens):
-            postings = index.setdefault(token, {})
-            posting = postings.get(doc_id)
-            if posting is None:
-                posting = Posting(freq=0, positions=[])
-                postings[doc_id] = posting
-            posting.freq += 1
-            posting.positions.append(position)
+    # Unique terms is the union across fields: a term appearing in both
+    # text and tag is counted once.
+    all_terms: set[str] = set()
+    for field_index in index.values():
+        all_terms.update(field_index.keys())
 
     metadata = IndexMetadata(
         base_url=base_url,
         created_at=_now_utc_iso(),
         page_count=len(documents),
         total_tokens=total_tokens,
-        unique_terms=len(index),
+        unique_terms=len(all_terms),
         politeness_delay_seconds=politeness_delay_seconds,
     )
 
