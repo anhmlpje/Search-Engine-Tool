@@ -413,8 +413,8 @@ and `--explain`), and the corresponding test files.
 
 1. Bump `schema_version` to 2. Update `models.py` so `SearchIndex.index`
    becomes `dict[field, dict[term, dict[doc_id, Posting]]]` and `Document`
-   gains a `tokens: list[str]` array. Keep v1 readable by branching on the
-   loaded version inside `storage.load`.
+   gains per-field token streams. Reject v1 explicitly in `storage.load`
+   with a rebuild message rather than carrying migration code.
 2. Refactor `indexer.build_index` to emit one posting list per field
    (`text`, `author`, `tag`) while sharing `doc_id` and `length`. Retain
    the raw token sequence for each document so snippets can be assembled
